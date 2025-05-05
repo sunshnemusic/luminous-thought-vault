@@ -3,6 +3,7 @@ import { Search, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ThemeToggle from "./ThemeToggle";
+import ModelSelector from "./ModelSelector";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 interface AppHeaderProps {
@@ -41,6 +42,9 @@ export default function AppHeader({ toggleSidebar }: AppHeaderProps) {
       </div>
       
       <div className="flex items-center gap-2">
+        <div className="hidden md:block">
+          <ModelSelector />
+        </div>
         <ThemeToggle />
       </div>
     </header>

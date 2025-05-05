@@ -5,6 +5,7 @@ import AppHeader from "@/components/AppHeader";
 import NoteCard from "@/components/NoteCard";
 import EmptyState from "@/components/EmptyState";
 import CreateNoteButton from "@/components/CreateNoteButton";
+import CreateNoteForm from "@/components/CreateNoteForm";
 import { sampleNotes, Note } from "@/data/sample-notes";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -15,14 +16,22 @@ import { Plus } from "lucide-react";
 const Index = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notes, setNotes] = useState<Note[]>(sampleNotes);
+  const [isCreateNoteOpen, setIsCreateNoteOpen] = useState(false);
   const isMobile = useIsMobile();
   const { toast } = useToast();
 
   const handleCreateNote = () => {
-    toast({
-      title: "Coming Soon",
-      description: "Note creation will be available once connected to the backend.",
-    });
+    setIsCreateNoteOpen(true);
+  };
+
+  const handleSaveNote = (noteData: Omit<Note, "id" | "date">) => {
+    const newNote: Note = {
+      id: Date.now().toString(),
+      date: new Date().toISOString().split('T')[0],
+      ...noteData
+    };
+    
+    setNotes([newNote, ...notes]);
   };
 
   const handleNoteClick = (note: Note) => {
@@ -80,6 +89,12 @@ const Index = () => {
       </div>
       
       {isMobile && <CreateNoteButton onClick={handleCreateNote} />}
+      
+      <CreateNoteForm
+        isOpen={isCreateNoteOpen}
+        onOpenChange={setIsCreateNoteOpen}
+        onSave={handleSaveNote}
+      />
     </div>
   );
 };
