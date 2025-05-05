@@ -80,7 +80,7 @@ const Index = () => {
                     title={note.title}
                     content={note.content}
                     date={note.date}
-                    tags={note.tags}
+                    tags={note.tags.map(tag => tag.name)} // Convert Tag[] to string[]
                     type={note.type}
                     onClick={() => handleNoteClick(note)}
                   />

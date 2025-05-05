@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,6 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { RegisterRequest } from "@/services/apiService";
 
 const registerSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -40,7 +40,14 @@ export default function Register() {
 
   const onSubmit = (data: RegisterFormValues) => {
     const { confirmPassword, ...registerData } = data;
-    register(registerData, {
+    // Ensure data matches RegisterRequest type with all required fields
+    const requestData: RegisterRequest = {
+      email: registerData.email,
+      username: registerData.username,
+      password: registerData.password,
+    };
+    
+    register(requestData, {
       onSuccess: () => {
         setSuccess(true);
         setTimeout(() => {

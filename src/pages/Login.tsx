@@ -10,6 +10,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { LoginRequest } from "@/services/apiService";
 
 const loginSchema = z.object({
   username: z.string().min(1, "Email is required"),
@@ -31,7 +32,12 @@ export default function Login() {
   });
 
   const onSubmit = (data: LoginFormValues) => {
-    login(data);
+    // Ensure data matches LoginRequest type by ensuring username and password are present
+    const loginData: LoginRequest = {
+      username: data.username,
+      password: data.password,
+    };
+    login(loginData);
   };
   
   // If user is authenticated, redirect to home
