@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { X, AlertCircle } from "lucide-react";
+import { X } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -9,17 +9,17 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Note } from "@/data/sample-notes";
-import { useToast } from "@/components/ui/use-toast";
+import { useNotes } from "@/hooks/useNotes";
+import { useToast } from "@/hooks/use-toast";
+import { NoteCreateRequest } from "@/services/apiService";
 import { cn } from "@/lib/utils";
 
 interface CreateNoteFormProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (note: Omit<Note, "id" | "date">) => void;
 }
 
-export default function CreateNoteForm({ isOpen, onOpenChange, onSave }: CreateNoteFormProps) {
+export default function CreateNoteForm({ isOpen, onOpenChange }: CreateNoteFormProps) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [tagInput, setTagInput] = useState("");
@@ -27,6 +27,7 @@ export default function CreateNoteForm({ isOpen, onOpenChange, onSave }: CreateN
   const [type, setType] = useState<"note" | "link" | "image">("note");
   const [storeVectorEmbedding, setStoreVectorEmbedding] = useState(true);
   const { toast } = useToast();
+  const { createNote, isCreating } = useNotes();
   
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,23 +41,17 @@ export default function CreateNoteForm({ isOpen, onOpenChange, onSave }: CreateN
       return;
     }
     
-    const newNote = {
+    const newNote: NoteCreateRequest = {
       title: title.trim(),
       content: content.trim(),
       tags,
       type,
+      storeVector: storeVectorEmbedding
     };
     
-    onSave(newNote);
+    createNote(newNote);
     resetForm();
     onOpenChange(false);
-    
-    toast({
-      title: "Note created",
-      description: storeVectorEmbedding 
-        ? "Your note has been created and stored as a vector embedding." 
-        : "Your note has been created (without vector embedding)."
-    });
   };
   
   const resetForm = () => {
@@ -175,7 +170,13 @@ export default function CreateNoteForm({ isOpen, onOpenChange, onSave }: CreateN
             <SheetClose asChild>
               <Button type="button" variant="outline">Cancel</Button>
             </SheetClose>
-            <Button type="submit" className="bg-gradient hover:bg-brain-700">Save Note</Button>
+            <Button 
+              type="submit" 
+              className="bg-gradient hover:bg-brain-700"
+              disabled={isCreating}
+            >
+              {isCreating ? "Saving..." : "Save Note"}
+            </Button>
           </div>
         </form>
       </SheetContent>

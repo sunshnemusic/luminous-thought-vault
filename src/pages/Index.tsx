@@ -1,37 +1,31 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Sidebar from "@/components/Sidebar";
 import AppHeader from "@/components/AppHeader";
 import NoteCard from "@/components/NoteCard";
 import EmptyState from "@/components/EmptyState";
 import CreateNoteButton from "@/components/CreateNoteButton";
 import CreateNoteForm from "@/components/CreateNoteForm";
-import { sampleNotes, Note } from "@/data/sample-notes";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
+import { useNotes } from "@/hooks/useNotes";
+import { useSearch } from "@/hooks/useSearch";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
+import { Note } from "@/services/apiService";
 
 const Index = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [notes, setNotes] = useState<Note[]>(sampleNotes);
   const [isCreateNoteOpen, setIsCreateNoteOpen] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const isMobile = useIsMobile();
   const { toast } = useToast();
+  const { notes, isLoadingNotes } = useNotes();
+  const { searchResults } = useSearch();
 
   const handleCreateNote = () => {
     setIsCreateNoteOpen(true);
-  };
-
-  const handleSaveNote = (noteData: Omit<Note, "id" | "date">) => {
-    const newNote: Note = {
-      id: Date.now().toString(),
-      date: new Date().toISOString().split('T')[0],
-      ...noteData
-    };
-    
-    setNotes([newNote, ...notes]);
   };
 
   const handleNoteClick = (note: Note) => {
@@ -41,14 +35,19 @@ const Index = () => {
     });
   };
 
-  const hasNotes = notes.length > 0;
+  const displayNotes = isSearching ? searchResults : notes;
+  const hasNotes = displayNotes.length > 0;
+  const isLoading = isLoadingNotes && !hasNotes;
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
       
       <div className="flex flex-col flex-1 overflow-hidden">
-        <AppHeader toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+        <AppHeader 
+          toggleSidebar={() => setSidebarOpen(!sidebarOpen)} 
+          onSearchResults={(hasResults) => setIsSearching(hasResults)}
+        />
         
         <main 
           className={cn(
@@ -58,7 +57,9 @@ const Index = () => {
         >
           <div className="max-w-7xl mx-auto">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-semibold">All Notes</h2>
+              <h2 className="text-2xl font-semibold">
+                {isSearching ? "Search Results" : "All Notes"}
+              </h2>
               
               <div className="hidden md:flex">
                 <Button className="bg-gradient hover:bg-brain-700" onClick={handleCreateNote}>
@@ -67,9 +68,13 @@ const Index = () => {
               </div>
             </div>
             
-            {hasNotes ? (
+            {isLoading ? (
+              <div className="flex justify-center items-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+              </div>
+            ) : hasNotes ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {notes.map((note) => (
+                {displayNotes.map((note) => (
                   <NoteCard
                     key={note.id}
                     title={note.title}
@@ -93,7 +98,6 @@ const Index = () => {
       <CreateNoteForm
         isOpen={isCreateNoteOpen}
         onOpenChange={setIsCreateNoteOpen}
-        onSave={handleSaveNote}
       />
     </div>
   );

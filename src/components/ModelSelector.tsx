@@ -15,6 +15,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { useModel } from "@/contexts/ModelContext";
 
 const models = [
   {
@@ -34,20 +35,13 @@ const models = [
   },
 ];
 
-interface ModelSelectorProps {
-  onModelChange?: (model: string) => void;
-}
-
-export default function ModelSelector({ onModelChange }: ModelSelectorProps) {
+export default function ModelSelector() {
   const [open, setOpen] = useState(false);
-  const [selectedModel, setSelectedModel] = useState("gpt-4o");
+  const { currentModel, setCurrentModel } = useModel();
 
   const handleSelectModel = (value: string) => {
-    setSelectedModel(value);
+    setCurrentModel(value as "gpt-4o-mini" | "gpt-4o" | "gpt-4.5-preview");
     setOpen(false);
-    if (onModelChange) {
-      onModelChange(value);
-    }
   };
 
   return (
@@ -61,7 +55,7 @@ export default function ModelSelector({ onModelChange }: ModelSelectorProps) {
         >
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-blue-500" />
-            <span>{models.find(model => model.value === selectedModel)?.label || "Select model"}</span>
+            <span>{models.find(model => model.value === currentModel)?.label || "Select model"}</span>
           </div>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -82,7 +76,7 @@ export default function ModelSelector({ onModelChange }: ModelSelectorProps) {
                     <Sparkles className="mr-2 h-4 w-4 text-blue-500" />
                     <span>{model.label}</span>
                   </div>
-                  {selectedModel === model.value && (
+                  {currentModel === model.value && (
                     <Check className="h-4 w-4" />
                   )}
                 </div>

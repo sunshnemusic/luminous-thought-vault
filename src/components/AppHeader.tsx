@@ -5,13 +5,36 @@ import { Input } from "@/components/ui/input";
 import ThemeToggle from "./ThemeToggle";
 import ModelSelector from "./ModelSelector";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useSearch } from "@/hooks/useSearch";
+import { useState, useEffect } from "react";
 
 interface AppHeaderProps {
   toggleSidebar: () => void;
+  onSearchResults?: (hasResults: boolean) => void;
 }
 
-export default function AppHeader({ toggleSidebar }: AppHeaderProps) {
+export default function AppHeader({ toggleSidebar, onSearchResults }: AppHeaderProps) {
   const isMobile = useIsMobile();
+  const { searchQuery, handleSearch, isSearching, searchResults } = useSearch();
+  const [inputValue, setInputValue] = useState("");
+  
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (inputValue) {
+        handleSearch(inputValue);
+      }
+    }, 500);
+    
+    return () => clearTimeout(timer);
+  }, [inputValue]);
+  
+  // Notify parent component about search results
+  useEffect(() => {
+    if (onSearchResults) {
+      onSearchResults(searchResults.length > 0);
+    }
+  }, [searchResults, onSearchResults]);
 
   return (
     <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b bg-background/95 px-4 backdrop-blur-sm">
@@ -32,11 +55,13 @@ export default function AppHeader({ toggleSidebar }: AppHeaderProps) {
       
       <div className="flex flex-1 max-w-md mx-4">
         <div className="relative w-full">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Search className={`absolute left-2.5 top-2.5 h-4 w-4 ${isSearching ? "text-primary animate-pulse" : "text-muted-foreground"}`} />
           <Input
             type="search"
             placeholder="Search your second brain..."
             className="pl-8 w-full"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
           />
         </div>
       </div>
