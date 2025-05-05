@@ -4,6 +4,11 @@ import { useMutation } from '@tanstack/react-query';
 import { apiService, LoginRequest, RegisterRequest, User } from '@/services/apiService';
 import { useToast } from '@/hooks/use-toast';
 
+interface AuthCallbacks {
+  onSuccess?: () => void;
+  onError?: (error: any) => void;
+}
+
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(apiService.isAuthenticated());
@@ -47,6 +52,28 @@ export function useAuth() {
     },
   });
 
+  const wrappedLogin = (credentials: LoginRequest, callbacks?: AuthCallbacks) => {
+    login(credentials, {
+      onSuccess: () => {
+        callbacks?.onSuccess?.();
+      },
+      onError: (error) => {
+        callbacks?.onError?.(error);
+      },
+    });
+  };
+
+  const wrappedRegister = (userData: RegisterRequest, callbacks?: AuthCallbacks) => {
+    register(userData, {
+      onSuccess: (data) => {
+        callbacks?.onSuccess?.();
+      },
+      onError: (error) => {
+        callbacks?.onError?.(error);
+      },
+    });
+  };
+
   const logout = () => {
     apiService.logout();
     setUser(null);
@@ -70,8 +97,8 @@ export function useAuth() {
   return {
     user,
     isAuthenticated,
-    login,
-    register,
+    login: wrappedLogin,
+    register: wrappedRegister,
     logout,
     isLoggingIn,
     isRegistering,

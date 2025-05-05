@@ -21,9 +21,15 @@ models.Base.metadata.create_all(bind=engine)
 app = FastAPI(title="ThoughtVault API")
 
 # Enable CORS
+# For production, replace with specific frontend origin
+allowed_origins = [
+    os.getenv("FRONTEND_URL", "http://localhost:8080"),  # Default to localhost
+    "https://thoughtvault.example.com",  # Replace with your actual domain
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -52,6 +58,6 @@ def read_root():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy"}
+    return {"status": "healthy", "version": "1.0.0"}
 
 # Run with: uvicorn main:app --reload

@@ -1,15 +1,18 @@
-import { useState } from "react";
+
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle, CheckCircle } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { RegisterRequest } from "@/services/apiService";
+import ApiStatus from "@/components/ApiStatus";
 
 const registerSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -27,6 +30,7 @@ export default function Register() {
   const { register, isRegistering } = useAuth();
   const navigate = useNavigate();
   const [success, setSuccess] = useState(false);
+  const [registerError, setRegisterError] = useState<string | null>(null);
   
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
@@ -38,7 +42,14 @@ export default function Register() {
     },
   });
 
+  useEffect(() => {
+    // Clear error when form values change
+    const subscription = form.watch(() => setRegisterError(null));
+    return () => subscription.unsubscribe();
+  }, [form.watch]);
+
   const onSubmit = (data: RegisterFormValues) => {
+    setRegisterError(null);
     const { confirmPassword, ...registerData } = data;
     // Ensure data matches RegisterRequest type with all required fields
     const requestData: RegisterRequest = {
@@ -53,6 +64,10 @@ export default function Register() {
         setTimeout(() => {
           navigate('/login');
         }, 2000);
+      },
+      onError: (error: any) => {
+        const message = error?.response?.data?.detail || "Registration failed. This email might already be in use.";
+        setRegisterError(message);
       }
     });
   };
@@ -67,6 +82,9 @@ export default function Register() {
               Redirecting you to the login page...
             </CardDescription>
           </CardHeader>
+          <CardContent className="flex justify-center">
+            <CheckCircle className="h-16 w-16 text-green-500" />
+          </CardContent>
         </Card>
       </div>
     );
@@ -83,6 +101,13 @@ export default function Register() {
         </CardHeader>
         
         <CardContent>
+          {registerError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{registerError}</AlertDescription>
+            </Alert>
+          )}
+          
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
@@ -173,6 +198,9 @@ export default function Register() {
             <Link to="/login" className="underline text-primary">
               Login
             </Link>
+          </div>
+          <div className="text-center mt-4">
+            <ApiStatus />
           </div>
         </CardFooter>
       </Card>
