@@ -3,20 +3,26 @@ import { createClient } from '@supabase/supabase-js';
 import { createBrowserClient } from '@supabase/ssr';
 import { Database } from '@/types/supabase';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+// Check for environment variables
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// Validate essential environment variables
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Missing Supabase environment variables');
+  console.error('Missing Supabase environment variables. Please make sure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in your .env file.');
 }
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
+// Create Supabase client with proper type safety
+export const supabase = createClient<Database>(
+  supabaseUrl || 'https://placeholder-url.supabase.co', // Fallback URL to prevent runtime errors
+  supabaseAnonKey || 'placeholder-key', // Fallback key to prevent runtime errors
+);
 
 // Browser-specific client for auth operations
 export const createBrowserSupabaseClient = () => 
   createBrowserClient<Database>(
-    supabaseUrl,
-    supabaseAnonKey
+    supabaseUrl || 'https://placeholder-url.supabase.co',
+    supabaseAnonKey || 'placeholder-key'
   );
 
 export const getEmbedding = async (text: string): Promise<number[]> => {
@@ -25,7 +31,7 @@ export const getEmbedding = async (text: string): Promise<number[]> => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabase.auth.getSession()}`
+        'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token || ''}`
       },
       body: JSON.stringify({ text })
     });

@@ -1,4 +1,3 @@
-
 import { supabase, getEmbedding } from '@/lib/supabase';
 import { v4 as uuid } from 'uuid';
 
@@ -157,7 +156,7 @@ export const apiService = {
         id: note.id,
         title: note.title,
         content: note.content,
-        type: note.type,
+        type: note.type as "note" | "link" | "image",
         date: note.created_at,
         tags: tags,
         vectorId: note.vector_id
@@ -193,9 +192,10 @@ export const apiService = {
         const noteTags = (noteTagsData || [])
           .filter(nt => nt.note_id === note.id)
           .map(nt => ({ 
-            id: nt.tags.id, 
-            name: nt.tags.name 
-          }));
+            id: nt.tags?.id, 
+            name: nt.tags?.name 
+          }))
+          .filter(tag => tag.id && tag.name);
         
         return {
           id: note.id,
@@ -232,10 +232,12 @@ export const apiService = {
       
       if (tagsError) throw tagsError;
       
-      const tags = (noteTagsData || []).map(nt => ({
-        id: nt.tags.id,
-        name: nt.tags.name
-      }));
+      const tags = (noteTagsData || [])
+        .map(nt => ({
+          id: nt.tags?.id,
+          name: nt.tags?.name
+        }))
+        .filter(tag => tag.id && tag.name);
       
       return {
         id: note.id,
@@ -449,9 +451,10 @@ export const apiService = {
         const noteTags = (noteTagsData || [])
           .filter(nt => nt.note_id === result.id)
           .map(nt => ({
-            id: nt.tags.id,
-            name: nt.tags.name
-          }));
+            id: nt.tags?.id,
+            name: nt.tags?.name
+          }))
+          .filter(tag => tag.id && tag.name);
         
         return {
           id: result.id,
