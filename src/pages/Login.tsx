@@ -11,25 +11,25 @@ import { AlertCircle } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { LoginRequest } from "@/services/apiService";
+import { LoginRequest } from "@/hooks/useAuth";
 import ApiStatus from "@/components/ApiStatus";
 
 const loginSchema = z.object({
-  username: z.string().min(1, "Email is required"),
+  email: z.string().email("Valid email is required"),
   password: z.string().min(1, "Password is required"),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function Login() {
-  const { login, isLoggingIn, isAuthenticated } = useAuth();
+  const { login, isLoading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [loginError, setLoginError] = useState<string | null>(null);
   
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      username: "",
+      email: "",
       password: "",
     },
   });
@@ -44,23 +44,24 @@ export default function Login() {
     setLoginError(null);
     // Ensure data matches LoginRequest type
     const loginData: LoginRequest = {
-      username: data.username,
+      email: data.email,
       password: data.password,
     };
     
     login(loginData, {
       onError: (error: any) => {
-        const message = error?.response?.data?.detail || "Login failed. Please check your credentials.";
+        const message = error?.message || "Login failed. Please check your credentials.";
         setLoginError(message);
       }
     });
   };
   
   // If user is authenticated, redirect to home
-  if (isAuthenticated) {
-    navigate("/");
-    return null;
-  }
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate("/");
+    }
+  }, [isAuthenticated, navigate]);
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
@@ -84,7 +85,7 @@ export default function Login() {
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
-                name="username"
+                name="email"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Email</FormLabel>
@@ -121,9 +122,9 @@ export default function Login() {
               <Button 
                 type="submit" 
                 className="w-full bg-gradient hover:bg-brain-700"
-                disabled={isLoggingIn}
+                disabled={isLoading}
               >
-                {isLoggingIn ? "Logging in..." : "Login"}
+                {isLoading ? "Logging in..." : "Login"}
               </Button>
             </form>
           </Form>

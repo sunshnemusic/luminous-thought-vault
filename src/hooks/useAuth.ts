@@ -1,8 +1,19 @@
 
 import { useState, useEffect } from 'react';
-import { useMutation } from '@tanstack/react-query';
-import { apiService, LoginRequest, RegisterRequest, User } from '@/services/apiService';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/lib/supabase';
+import { Session, User, AuthError } from '@supabase/supabase-js';
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface RegisterRequest {
+  email: string;
+  username: string;
+  password: string;
+}
 
 interface AuthCallbacks {
   onSuccess?: () => void;
@@ -11,96 +22,133 @@ interface AuthCallbacks {
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(apiService.isAuthenticated());
+  const [session, setSession] = useState<Session | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const { toast } = useToast();
 
-  const { mutate: login, isPending: isLoggingIn } = useMutation({
-    mutationFn: apiService.login,
-    onSuccess: () => {
-      setIsAuthenticated(true);
+  // Initial session check
+  useEffect(() => {
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        setSession(session);
+        setUser(session?.user || null);
+        setIsAuthenticated(!!session);
+        setIsLoading(false);
+      }
+    );
+
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user || null);
+      setIsAuthenticated(!!session);
+      setIsLoading(false);
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  const register = async (userData: RegisterRequest, callbacks?: AuthCallbacks) => {
+    try {
+      setIsLoading(true);
+      const { data, error } = await supabase.auth.signUp({
+        email: userData.email,
+        password: userData.password,
+        options: {
+          data: {
+            username: userData.username,
+          },
+        },
+      });
+
+      if (error) throw error;
+      
+      toast({
+        title: "Registration successful",
+        description: "Please check your email for verification.",
+      });
+      
+      callbacks?.onSuccess?.();
+      return data;
+    } catch (error: any) {
+      console.error("Registration failed:", error);
+      toast({
+        title: "Registration failed",
+        description: error.message || "This email might already be in use or there was a connection problem.",
+        variant: "destructive",
+      });
+      callbacks?.onError?.(error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const login = async (credentials: LoginRequest, callbacks?: AuthCallbacks) => {
+    try {
+      setIsLoading(true);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: credentials.email,
+        password: credentials.password,
+      });
+
+      if (error) throw error;
+      
       toast({
         title: "Login successful",
         description: "You are now logged in.",
       });
-    },
-    onError: (error) => {
+      
+      callbacks?.onSuccess?.();
+      return data;
+    } catch (error: any) {
       console.error("Login failed:", error);
       toast({
         title: "Login failed",
-        description: "Please check your credentials and try again.",
+        description: error.message || "Please check your credentials and try again.",
         variant: "destructive",
       });
-    },
-  });
+      callbacks?.onError?.(error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  const { mutate: register, isPending: isRegistering } = useMutation({
-    mutationFn: apiService.register,
-    onSuccess: (data) => {
-      setUser(data);
+  const logout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      
       toast({
-        title: "Registration successful",
-        description: "Please log in with your new credentials.",
+        title: "Logged out",
+        description: "You have been logged out successfully.",
       });
-    },
-    onError: (error) => {
-      console.error("Registration failed:", error);
+    } catch (error) {
+      console.error("Logout failed:", error);
       toast({
-        title: "Registration failed",
-        description: "This email might already be in use or there was a connection problem.",
+        title: "Logout failed",
+        description: "There was an error logging you out. Please try again.",
         variant: "destructive",
       });
-    },
-  });
-
-  const wrappedLogin = (credentials: LoginRequest, callbacks?: AuthCallbacks) => {
-    login(credentials, {
-      onSuccess: () => {
-        callbacks?.onSuccess?.();
-      },
-      onError: (error) => {
-        callbacks?.onError?.(error);
-      },
-    });
+    }
   };
 
-  const wrappedRegister = (userData: RegisterRequest, callbacks?: AuthCallbacks) => {
-    register(userData, {
-      onSuccess: (data) => {
-        callbacks?.onSuccess?.();
-      },
-      onError: (error) => {
-        callbacks?.onError?.(error);
-      },
-    });
-  };
-
-  const logout = () => {
-    apiService.logout();
-    setUser(null);
-    setIsAuthenticated(false);
-    toast({
-      title: "Logged out",
-      description: "You have been logged out successfully.",
-    });
-  };
-
-  // Check authentication status on mount
-  useEffect(() => {
-    const checkAuth = async () => {
-      const isAuth = apiService.isAuthenticated();
-      setIsAuthenticated(isAuth);
-    };
-
-    checkAuth();
-  }, []);
+  const isRegistering = false;
+  const isLoggingIn = false;
 
   return {
     user,
+    session,
     isAuthenticated,
-    login: wrappedLogin,
-    register: wrappedRegister,
+    isLoading,
+    register,
+    login,
     logout,
-    isLoggingIn,
     isRegistering,
+    isLoggingIn,
   };
 }

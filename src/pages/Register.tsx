@@ -11,7 +11,7 @@ import { AlertCircle, CheckCircle } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { RegisterRequest } from "@/services/apiService";
+import { RegisterRequest } from "@/hooks/useAuth";
 import ApiStatus from "@/components/ApiStatus";
 
 const registerSchema = z.object({
@@ -27,7 +27,7 @@ const registerSchema = z.object({
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function Register() {
-  const { register, isRegistering } = useAuth();
+  const { register, isLoading } = useAuth();
   const navigate = useNavigate();
   const [success, setSuccess] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
@@ -66,7 +66,7 @@ export default function Register() {
         }, 2000);
       },
       onError: (error: any) => {
-        const message = error?.response?.data?.detail || "Registration failed. This email might already be in use.";
+        const message = error?.message || "Registration failed. This email might already be in use.";
         setRegisterError(message);
       }
     });
@@ -79,7 +79,7 @@ export default function Register() {
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl text-center font-bold text-gradient">Registration Successful!</CardTitle>
             <CardDescription className="text-center">
-              Redirecting you to the login page...
+              Please check your email for verification. Redirecting you to the login page...
             </CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center">
@@ -184,9 +184,9 @@ export default function Register() {
               <Button 
                 type="submit" 
                 className="w-full bg-gradient hover:bg-brain-700"
-                disabled={isRegistering}
+                disabled={isLoading}
               >
-                {isRegistering ? "Creating Account..." : "Register"}
+                {isLoading ? "Creating Account..." : "Register"}
               </Button>
             </form>
           </Form>

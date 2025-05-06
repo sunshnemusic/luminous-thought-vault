@@ -1,25 +1,6 @@
 
-import axios from "axios";
-
-// Set the base URL for API requests
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
-
-// Create axios instance with base configuration
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
-});
-
-// Add request interceptor to include token in headers
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+import { supabase, getEmbedding } from '@/lib/supabase';
+import { v4 as uuid } from 'uuid';
 
 // Types
 export interface NoteCreateRequest {
@@ -79,80 +60,412 @@ export interface AuthResponse {
   token_type: string;
 }
 
+// Get or create tags
+const getOrCreateTags = async (tagNames: string[]): Promise<Tag[]> => {
+  const tags: Tag[] = [];
+  
+  for (const name of tagNames) {
+    // Check if tag exists
+    let { data: existingTag } = await supabase
+      .from('tags')
+      .select('*')
+      .eq('name', name)
+      .single();
+    
+    if (!existingTag) {
+      // Create new tag
+      const { data: newTag, error } = await supabase
+        .from('tags')
+        .insert({ id: uuid(), name })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      existingTag = newTag;
+    }
+    
+    if (existingTag) {
+      tags.push({ id: existingTag.id, name: existingTag.name });
+    }
+  }
+  
+  return tags;
+};
+
 // API functions
 export const apiService = {
-  // Authentication
-  register: async (userData: RegisterRequest): Promise<User> => {
-    const response = await api.post<User>("/register", userData);
-    return response.data;
-  },
-  
-  login: async (loginData: LoginRequest): Promise<AuthResponse> => {
-    // Convert to form data as required by OAuth2
-    const formData = new FormData();
-    formData.append("username", loginData.username);
-    formData.append("password", loginData.password);
-    
-    const response = await axios.post<AuthResponse>(`${API_BASE_URL}/token`, formData, {
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-    });
-    
-    // Store token in localStorage
-    localStorage.setItem("token", response.data.access_token);
-    
-    return response.data;
-  },
-  
-  logout: (): void => {
-    localStorage.removeItem("token");
-  },
-  
-  isAuthenticated: (): boolean => {
-    return !!localStorage.getItem("token");
-  },
-
   // Note operations
   createNote: async (noteData: NoteCreateRequest): Promise<Note> => {
-    const response = await api.post<Note>("/notes", noteData);
-    return response.data;
+    try {
+      // Create note
+      const noteId = uuid();
+      let vectorId = null;
+      
+      // Get or create tags
+      const tags = await getOrCreateTags(noteData.tags);
+      
+      // Store vector embedding if requested
+      if (noteData.storeVector) {
+        const combined_text = `${noteData.title} ${noteData.content} ${noteData.tags.join(' ')}`;
+        const embedding = await getEmbedding(combined_text);
+        
+        // Generate unique ID for the vector
+        vectorId = `note:${noteId}`;
+        
+        // Store in note_embeddings table
+        const { error: embeddingError } = await supabase
+          .from('note_embeddings')
+          .insert({
+            id: vectorId,
+            note_id: noteId,
+            embedding
+          });
+        
+        if (embeddingError) throw embeddingError;
+      }
+      
+      // Create note in database
+      const { data: note, error: noteError } = await supabase
+        .from('notes')
+        .insert({
+          id: noteId,
+          title: noteData.title,
+          content: noteData.content,
+          type: noteData.type,
+          vector_id: vectorId
+        })
+        .select()
+        .single();
+      
+      if (noteError) throw noteError;
+      
+      // Add note-tag relationships
+      if (tags.length > 0) {
+        const noteTagRows = tags.map(tag => ({
+          note_id: noteId,
+          tag_id: tag.id
+        }));
+        
+        const { error: tagError } = await supabase
+          .from('note_tags')
+          .insert(noteTagRows);
+        
+        if (tagError) throw tagError;
+      }
+      
+      return {
+        id: note.id,
+        title: note.title,
+        content: note.content,
+        type: note.type,
+        date: note.created_at,
+        tags: tags,
+        vectorId: note.vector_id
+      };
+    } catch (error) {
+      console.error("Error creating note:", error);
+      throw error;
+    }
   },
 
   getNotes: async (): Promise<Note[]> => {
-    const response = await api.get<Note[]>("/notes");
-    return response.data;
+    try {
+      // Get notes
+      const { data: notes, error: notesError } = await supabase
+        .from('notes')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (notesError) throw notesError;
+      if (!notes) return [];
+      
+      // Get tags for each note
+      const noteIds = notes.map(note => note.id);
+      const { data: noteTags, error: tagsError } = await supabase
+        .from('note_tags')
+        .select('note_id, tags(*)')
+        .in('note_id', noteIds);
+      
+      if (tagsError) throw tagsError;
+      
+      // Map notes to response format
+      return notes.map(note => {
+        const noteTags = (noteTags || [])
+          .filter(nt => nt.note_id === note.id)
+          .map(nt => ({ 
+            id: nt.tags.id, 
+            name: nt.tags.name 
+          }));
+        
+        return {
+          id: note.id,
+          title: note.title,
+          content: note.content,
+          type: note.type as "note" | "link" | "image",
+          date: note.created_at,
+          tags: noteTags,
+          vectorId: note.vector_id
+        };
+      });
+    } catch (error) {
+      console.error("Error getting notes:", error);
+      throw error;
+    }
   },
 
   getNote: async (id: string): Promise<Note> => {
-    const response = await api.get<Note>(`/notes/${id}`);
-    return response.data;
+    try {
+      // Get note
+      const { data: note, error: noteError } = await supabase
+        .from('notes')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (noteError) throw noteError;
+      
+      // Get tags for note
+      const { data: noteTags, error: tagsError } = await supabase
+        .from('note_tags')
+        .select('tags(*)')
+        .eq('note_id', id);
+      
+      if (tagsError) throw tagsError;
+      
+      const tags = (noteTags || []).map(nt => ({
+        id: nt.tags.id,
+        name: nt.tags.name
+      }));
+      
+      return {
+        id: note.id,
+        title: note.title,
+        content: note.content,
+        type: note.type as "note" | "link" | "image",
+        date: note.created_at,
+        tags: tags,
+        vectorId: note.vector_id
+      };
+    } catch (error) {
+      console.error("Error getting note:", error);
+      throw error;
+    }
   },
   
   updateNote: async (id: string, noteData: NoteUpdateRequest): Promise<Note> => {
-    const response = await api.put<Note>(`/notes/${id}`, noteData);
-    return response.data;
+    try {
+      // Get existing note
+      const { data: existingNote, error: noteError } = await supabase
+        .from('notes')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (noteError) throw noteError;
+      
+      // Update note in database
+      const updateData: any = {};
+      if (noteData.title !== undefined) updateData.title = noteData.title;
+      if (noteData.content !== undefined) updateData.content = noteData.content;
+      if (noteData.type !== undefined) updateData.type = noteData.type;
+      updateData.updated_at = new Date().toISOString();
+      
+      const { data: updatedNote, error: updateError } = await supabase
+        .from('notes')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (updateError) throw updateError;
+      
+      // Update tags if provided
+      let tags: Tag[] = [];
+      if (noteData.tags !== undefined) {
+        // Get or create new tags
+        tags = await getOrCreateTags(noteData.tags);
+        
+        // Delete existing note-tag relationships
+        await supabase
+          .from('note_tags')
+          .delete()
+          .eq('note_id', id);
+        
+        // Create new note-tag relationships
+        if (tags.length > 0) {
+          const noteTagRows = tags.map(tag => ({
+            note_id: id,
+            tag_id: tag.id
+          }));
+          
+          const { error: tagError } = await supabase
+            .from('note_tags')
+            .insert(noteTagRows);
+          
+          if (tagError) throw tagError;
+        }
+      } else {
+        // Get existing tags
+        const { data: noteTags, error: tagsError } = await supabase
+          .from('note_tags')
+          .select('tags(*)')
+          .eq('note_id', id);
+        
+        if (tagsError) throw tagsError;
+        
+        tags = (noteTags || []).map(nt => ({
+          id: nt.tags.id,
+          name: nt.tags.name
+        }));
+      }
+      
+      // Update vector embedding if it exists
+      if (existingNote.vector_id) {
+        const combined_text = `${updatedNote.title} ${updatedNote.content} ${tags.map(tag => tag.name).join(' ')}`;
+        const embedding = await getEmbedding(combined_text);
+        
+        // Update in note_embeddings table
+        const { error: embeddingError } = await supabase
+          .from('note_embeddings')
+          .update({ embedding })
+          .eq('id', existingNote.vector_id);
+        
+        if (embeddingError) throw embeddingError;
+      }
+      
+      return {
+        id: updatedNote.id,
+        title: updatedNote.title,
+        content: updatedNote.content,
+        type: updatedNote.type,
+        date: updatedNote.created_at,
+        tags: tags,
+        vectorId: updatedNote.vector_id
+      };
+    } catch (error) {
+      console.error("Error updating note:", error);
+      throw error;
+    }
   },
   
   deleteNote: async (id: string): Promise<void> => {
-    await api.delete(`/notes/${id}`);
+    try {
+      // Get note to check if it has a vector_id
+      const { data: note, error: noteError } = await supabase
+        .from('notes')
+        .select('vector_id')
+        .eq('id', id)
+        .single();
+      
+      if (noteError) throw noteError;
+      
+      // Delete vector embedding if it exists
+      if (note && note.vector_id) {
+        const { error: embeddingError } = await supabase
+          .from('note_embeddings')
+          .delete()
+          .eq('id', note.vector_id);
+        
+        if (embeddingError) throw embeddingError;
+      }
+      
+      // Delete note-tag relationships
+      await supabase
+        .from('note_tags')
+        .delete()
+        .eq('note_id', id);
+      
+      // Delete note
+      const { error: deleteError } = await supabase
+        .from('notes')
+        .delete()
+        .eq('id', id);
+      
+      if (deleteError) throw deleteError;
+    } catch (error) {
+      console.error("Error deleting note:", error);
+      throw error;
+    }
   },
 
   // Tag operations
   getTags: async (): Promise<Tag[]> => {
-    const response = await api.get<Tag[]>("/tags");
-    return response.data;
+    try {
+      const { data: tags, error } = await supabase
+        .from('tags')
+        .select('*');
+      
+      if (error) throw error;
+      
+      return (tags || []).map(tag => ({
+        id: tag.id,
+        name: tag.name
+      }));
+    } catch (error) {
+      console.error("Error getting tags:", error);
+      throw error;
+    }
   },
 
   // Search operations
   semanticSearch: async (request: SearchRequest): Promise<Note[]> => {
-    const response = await api.post<Note[]>("/search", request);
-    return response.data;
-  },
-};
-
-// Export a utility to get headers for fetch requests
-export const getAuthHeaders = () => {
-  const token = localStorage.getItem("token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
+    try {
+      // Generate embedding for search query
+      const embedding = await getEmbedding(request.query);
+      
+      // Call match_notes function
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) throw new Error("User not authenticated");
+      
+      const { data, error } = await supabase.rpc(
+        'match_notes',
+        {
+          query_embedding: embedding,
+          match_threshold: 0.5,
+          match_count: request.limit || 10,
+          user_id: user.user.id
+        }
+      );
+      
+      if (error) throw error;
+      
+      if (!data || data.length === 0) {
+        return [];
+      }
+      
+      // Get note IDs from results
+      const noteIds = data.map(result => result.id);
+      
+      // Get tags for each note
+      const { data: noteTags, error: tagsError } = await supabase
+        .from('note_tags')
+        .select('note_id, tags(*)')
+        .in('note_id', noteIds);
+      
+      if (tagsError) throw tagsError;
+      
+      // Map results to Note objects
+      return data.map(result => {
+        const noteTags = (noteTags || [])
+          .filter(nt => nt.note_id === result.id)
+          .map(nt => ({
+            id: nt.tags.id,
+            name: nt.tags.name
+          }));
+        
+        return {
+          id: result.id,
+          title: result.title,
+          content: result.content,
+          type: result.type as "note" | "link" | "image",
+          date: result.created_at,
+          tags: noteTags,
+          vectorId: result.vector_id
+        };
+      });
+    } catch (error) {
+      console.error("Search error:", error);
+      throw error;
+    }
+  }
 };
