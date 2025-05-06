@@ -181,7 +181,7 @@ export const apiService = {
       
       // Get tags for each note
       const noteIds = notes.map(note => note.id);
-      const { data: noteTags, error: tagsError } = await supabase
+      const { data: noteTagsData, error: tagsError } = await supabase
         .from('note_tags')
         .select('note_id, tags(*)')
         .in('note_id', noteIds);
@@ -190,7 +190,7 @@ export const apiService = {
       
       // Map notes to response format
       return notes.map(note => {
-        const noteTags = (noteTags || [])
+        const noteTags = (noteTagsData || [])
           .filter(nt => nt.note_id === note.id)
           .map(nt => ({ 
             id: nt.tags.id, 
@@ -225,14 +225,14 @@ export const apiService = {
       if (noteError) throw noteError;
       
       // Get tags for note
-      const { data: noteTags, error: tagsError } = await supabase
+      const { data: noteTagsData, error: tagsError } = await supabase
         .from('note_tags')
         .select('tags(*)')
         .eq('note_id', id);
       
       if (tagsError) throw tagsError;
       
-      const tags = (noteTags || []).map(nt => ({
+      const tags = (noteTagsData || []).map(nt => ({
         id: nt.tags.id,
         name: nt.tags.name
       }));
@@ -306,14 +306,14 @@ export const apiService = {
         }
       } else {
         // Get existing tags
-        const { data: noteTags, error: tagsError } = await supabase
+        const { data: noteTagsData, error: tagsError } = await supabase
           .from('note_tags')
           .select('tags(*)')
           .eq('note_id', id);
         
         if (tagsError) throw tagsError;
         
-        tags = (noteTags || []).map(nt => ({
+        tags = (noteTagsData || []).map(nt => ({
           id: nt.tags.id,
           name: nt.tags.name
         }));
@@ -437,7 +437,7 @@ export const apiService = {
       const noteIds = data.map(result => result.id);
       
       // Get tags for each note
-      const { data: noteTags, error: tagsError } = await supabase
+      const { data: noteTagsData, error: tagsError } = await supabase
         .from('note_tags')
         .select('note_id, tags(*)')
         .in('note_id', noteIds);
@@ -446,7 +446,7 @@ export const apiService = {
       
       // Map results to Note objects
       return data.map(result => {
-        const noteTags = (noteTags || [])
+        const noteTags = (noteTagsData || [])
           .filter(nt => nt.note_id === result.id)
           .map(nt => ({
             id: nt.tags.id,
